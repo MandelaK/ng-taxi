@@ -1,0 +1,1 @@
+https://testdriven.io/courses/real-time-app-with-django-channels-and-angular/
