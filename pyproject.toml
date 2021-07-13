@@ -5,7 +5,7 @@ description = "Django Backend For ng-taxi"
 authors = ["mandelak <kazi.keith@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "3.9.0"
+python = "3.9.6"
 Django = "^3.2.5"
 djangorestframework = "^3.12.4"
 djangorestframework-simplejwt = "^4.7.2"
