@@ -1,0 +1,18 @@
+{
+    "buildpacks": [
+        {
+            "url": "https://github.com/moneymeets/python-poetry-buildpack.git"
+        },
+        {
+            "url": "heroku/python"
+        }
+    ],
+    "env": {
+        "DJANGO_SECRET_KEY": {
+            "description": "Django Secret Key",
+            "generator": "secret",
+            "required": true
+        }
+    },
+    "repository": "https://github.com/MandelaK/ng-taxi.git"
+}
