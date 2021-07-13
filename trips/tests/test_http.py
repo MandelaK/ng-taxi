@@ -1,11 +1,15 @@
 import base64
 import json
+import uuid
 
 from django.contrib.auth import get_user_model
 from django.http import response as DjangoResponse
 from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APITestCase
+
+
+from trips.models import Trip
 
 
 PASSWORD = "pASSw0rd!"
@@ -162,3 +166,58 @@ class AuthenticationTest(APITestCase):
         self.assertEqual(response.data.get('detail').code, 'no_active_account')
         self.assertEqual(str(response.data.get('detail')),
                          NO_ACTIVE_ACCOUNT_ERROR_MESSAGE)
+
+
+class HttpTripTest(APITestCase):
+    def setUp(self):
+        user = create_user()
+
+        response = self.client.post(reverse('log_in'), data={
+            'username': user.username,
+            'password': PASSWORD
+        })
+
+        self.access = response.data['access']
+
+    def test_user_can_list_trips(self):
+        """
+        Users should be able to view a list of their trips
+        """
+
+        trips = [
+            Trip.objects.create(pick_up_address="A", drop_off_address="B"),
+            Trip.objects.create(pick_up_address="C", drop_off_address="D")
+        ]
+
+        response = self.client.get(
+            reverse('trip:trip_list'), HTTP_AUTHORIZATION=f'Bearer {self.access}')
+
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+
+        exp_trip_ids = [str(trip.id) for trip in trips]
+        act_trip_ids = [trip.get('id') for trip in response.data]
+
+        self.assertCountEqual(exp_trip_ids, act_trip_ids)
+
+    def test_user_can_retrieve_trip_by_id(self):
+        """
+        A user should be able to retrieve a single trip by its ID
+        """
+
+        trip = Trip.objects.create(pick_up_address="A", drop_off_address="B")
+        response = self.client.get(trip.get_absolute_url(
+        ), HTTP_AUTHORIZATION=f'Bearer {self.access}')
+
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+        self.assertEqual(str(trip.id), response.data.get('id'))
+
+    def test_user_can_retrieve_trip_by_id(self):
+        """
+        A user should be able to retrieve a single trip by its ID
+        """
+        response = self.client.get(reverse('trip:trip_detail', kwargs={
+            'trip_id': str(uuid.uuid4())
+        }), HTTP_AUTHORIZATION=f'Bearer {self.access}')
+
+        self.assertEqual(status.HTTP_404_NOT_FOUND, response.status_code)
+        self.assertIsNone(response.data.get('id'))

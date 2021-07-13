@@ -150,6 +150,8 @@ CHANNEL_LAYERS = {
     }
 }
 
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
 # Configure Django App for Heroku.
 django_heroku.settings(locals())
 
