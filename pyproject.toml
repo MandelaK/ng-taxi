@@ -18,9 +18,11 @@ psycopg2 = "^2.9.1"
 psycopg2-binary = "^2.9.1"
 django-heroku = "^0.3.1"
 pytest = "^6.2.4"
+pytest-asyncio = "^0.15.1"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.7"
+ipython = "^7.25.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
