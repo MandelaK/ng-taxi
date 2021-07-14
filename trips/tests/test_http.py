@@ -211,9 +211,10 @@ class HttpTripTest(APITestCase):
         self.assertEqual(status.HTTP_200_OK, response.status_code)
         self.assertEqual(str(trip.id), response.data.get('id'))
 
-    def test_user_can_retrieve_trip_by_id(self):
+    def test_user_cannot_retrieve_trip_that_does_not_exist(self):
         """
-        A user should be able to retrieve a single trip by its ID
+        A user should not be able to retrieve a single trip by its ID, if
+        the trip ID does not exist
         """
         response = self.client.get(reverse('trip:trip_detail', kwargs={
             'trip_id': str(uuid.uuid4())
