@@ -78,11 +78,11 @@ class TaxiConsumer(AsyncJsonWebsocketConsumer):
                     group='drivers', channel=self.channel_name
                 )
 
-                for trip_id in await self._get_trip_ids(user):
-                    await self.channel_layer.group_discard(
-                        group=trip_id,
-                        channel=self.channel_name
-                    )
+            for trip_id in await self._get_trip_ids(user):
+                await self.channel_layer.group_discard(
+                    group=trip_id,
+                    channel=self.channel_name
+                )
 
         await super().disconnect(code)
 
