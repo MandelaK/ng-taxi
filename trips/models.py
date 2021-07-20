@@ -7,7 +7,10 @@ from django.urls import reverse
 
 
 class User(AbstractUser):
-    pass
+    @property
+    def group(self):
+        groups = self.groups.all()
+        return groups[0].name if groups else None
 
 
 class Trip(models.Model):

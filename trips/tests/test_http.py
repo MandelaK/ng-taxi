@@ -3,6 +3,7 @@ import json
 import uuid
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.http import response as DjangoResponse
 from rest_framework import status
 from rest_framework.reverse import reverse
@@ -18,13 +19,20 @@ FIELD_REQUIRED_ERROR_MESSAGE = 'This field is required.'
 NO_ACTIVE_ACCOUNT_ERROR_MESSAGE = 'No active account found with the given credentials'
 
 
-def create_user(username: str = "user@example.com", password: str = PASSWORD, first_name: str = "test", last_name: str = "user"):
-    return get_user_model().objects.create_user(
+def create_user(username: str = "user@example.com", password: str = PASSWORD, first_name: str = "test", last_name: str = "user", group_name='rider'):
+    group, _ = Group.objects.get_or_create(name=group_name)
+
+    user = get_user_model().objects.create_user(
         username=username,
         first_name=first_name,
         last_name=last_name,
         password=password
     )
+
+    user.groups.add(group)
+    user.save()
+
+    return user
 
 
 class AuthenticationTest(APITestCase):
@@ -37,7 +45,8 @@ class AuthenticationTest(APITestCase):
             'first_name': 'test',
             'last_name': 'user',
             'password1': PASSWORD,
-            'password2': PASSWORD
+            'password2': PASSWORD,
+            'group': 'rider'
         })
 
         user = get_user_model().objects.last()
@@ -47,6 +56,7 @@ class AuthenticationTest(APITestCase):
         self.assertEqual(response.data['username'], user.username)
         self.assertEqual(response.data['first_name'], user.first_name)
         self.assertEqual(response.data['last_name'], user.last_name)
+        self.assertEqual(response.data['group'], user.group)
 
     def test_user_cannot_sign_up_with_duplicate_username(self):
         """
@@ -59,7 +69,8 @@ class AuthenticationTest(APITestCase):
             'first_name': 'test',
             'last_name': 'user',
             'password1': PASSWORD,
-            'password2': PASSWORD
+            'password2': PASSWORD,
+            'group': 'rider'
         })
 
         self.assertEqual(status.HTTP_400_BAD_REQUEST, response.status_code)
@@ -78,7 +89,8 @@ class AuthenticationTest(APITestCase):
             'first_name': 'test',
             'last_name': 'user',
             'password1': PASSWORD,
-            'password2': PASSWORD
+            'password2': PASSWORD,
+            'group': 'rider'
         })
 
         self.assertEqual(status.HTTP_400_BAD_REQUEST, response.status_code)
@@ -98,7 +110,8 @@ class AuthenticationTest(APITestCase):
             'first_name': 'test',
             'last_name': 'user',
             'password1': PASSWORD,
-            'password2': f'{PASSWORD}32'
+            'password2': f'{PASSWORD}32',
+            'group': 'rider'
         })
 
         self.assertEqual(status.HTTP_400_BAD_REQUEST, response.status_code)
@@ -170,14 +183,8 @@ class AuthenticationTest(APITestCase):
 
 class HttpTripTest(APITestCase):
     def setUp(self):
-        user = create_user()
-
-        response = self.client.post(reverse('log_in'), data={
-            'username': user.username,
-            'password': PASSWORD
-        })
-
-        self.access = response.data['access']
+        self.user = create_user()
+        self.client.login(username=self.user.username, password=PASSWORD)
 
     def test_user_can_list_trips(self):
         """
@@ -185,28 +192,38 @@ class HttpTripTest(APITestCase):
         """
 
         trips = [
-            Trip.objects.create(pick_up_address="A", drop_off_address="B"),
-            Trip.objects.create(pick_up_address="C", drop_off_address="D")
+            Trip.objects.create(pick_up_address="A",
+                                drop_off_address="B", rider=self.user),
+            Trip.objects.create(pick_up_address="C",
+                                drop_off_address="D", rider=self.user),
+            # Create a trip that is not associated to any rider, then we can test whether
+            # the rider can view it
+            Trip.objects.create(pick_up_address="D",
+                                drop_off_address="E")
+
         ]
 
         response = self.client.get(
-            reverse('trip:trip_list'), HTTP_AUTHORIZATION=f'Bearer {self.access}')
+            reverse('trip:trip_list'))
 
         self.assertEqual(status.HTTP_200_OK, response.status_code)
 
-        exp_trip_ids = [str(trip.id) for trip in trips]
-        act_trip_ids = [trip.get('id') for trip in response.data]
+        # We expecte the rider to only see the first two trips, as the third
+        # trip is ont associated to them
+        expected_trip_ids = [str(trip.id) for trip in trips[0:2]]
+        actual_trip_ids = [trip.get('id') for trip in response.data]
 
-        self.assertCountEqual(exp_trip_ids, act_trip_ids)
+        self.assertCountEqual(expected_trip_ids, actual_trip_ids)
 
     def test_user_can_retrieve_trip_by_id(self):
         """
         A user should be able to retrieve a single trip by its ID
         """
 
-        trip = Trip.objects.create(pick_up_address="A", drop_off_address="B")
+        trip = Trip.objects.create(
+            pick_up_address="A", drop_off_address="B", rider=self.user)
         response = self.client.get(trip.get_absolute_url(
-        ), HTTP_AUTHORIZATION=f'Bearer {self.access}')
+        ))
 
         self.assertEqual(status.HTTP_200_OK, response.status_code)
         self.assertEqual(str(trip.id), response.data.get('id'))
@@ -218,7 +235,19 @@ class HttpTripTest(APITestCase):
         """
         response = self.client.get(reverse('trip:trip_detail', kwargs={
             'trip_id': str(uuid.uuid4())
-        }), HTTP_AUTHORIZATION=f'Bearer {self.access}')
+        }))
+
+        self.assertEqual(status.HTTP_404_NOT_FOUND, response.status_code)
+        self.assertIsNone(response.data.get('id'))
+
+    def test_that_rider_cannot_view_trip_that_is_not_theirs(self):
+        """
+        A rider should not be able to view a trip that they did not request
+        """
+        trip = Trip.objects.create(
+            pick_up_address="A", drop_off_address="B")
+        response = self.client.get(trip.get_absolute_url(
+        ))
 
         self.assertEqual(status.HTTP_404_NOT_FOUND, response.status_code)
         self.assertIsNone(response.data.get('id'))
